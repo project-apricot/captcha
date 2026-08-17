@@ -1,0 +1,82 @@
+---
+title: Captcha
+description: Why provider answers are normalised before they are judged, what the three packages contain, and how a challenge reaches the server.
+---
+
+# Captcha
+
+Every captcha provider answers a slightly different question. reCAPTCHA v3 returns a confidence
+score and an action; reCAPTCHA v2 returns neither; hCaptcha returns *risk*, where higher is worse,
+and only for enterprise accounts; Turnstile returns pass or fail and nothing else. Code that talks to
+one of them directly ends up encoding that provider's quirks at every call site.
+
+This library normalises the answer first and judges it second. An endpoint says what it needs, not
+who it is asking:
+
+```csharp
+[ValidateCaptcha(Provider = "AdminPortal", AllowedActions = ["sign_in"])]
+```
+
+## The three packages
+
+| Package | Contains | Depends on |
+| --- | --- | --- |
+| `ApricotFramework.Captcha` | the provider abstraction, the three provider implementations, the result model and the requirement validator | nothing |
+| `ApricotFramework.Captcha.AspNetCore` | the guard that reads a request, the `[ValidateCaptcha]` filter, configuration binding and startup validation | the core and the framework |
+| `ApricotFramework.Captcha.ErrorDefinitions` | an exception mapper reporting failures as problem+json | the above and `ApricotFramework.ErrorDefinitions.AspNetCore` |
+
+The core has no dependencies, so a console or worker host that verifies a token pays for nothing it
+does not use. The error-definitions coupling is a package of its own precisely so that choosing this
+library does not choose your error-reporting library too.
+
+## Providers are instances, not types
+
+A *provider* here is one configured instance: a type paired with the credentials of one site. Several
+instances of the same type can coexist, which is what lets a service verify an admin portal against a
+different key from its public forms, run two providers side by side during a migration, or hold a key
+per tenant.
+
+```json
+{
+  "Captcha": {
+    "DefaultProvider": "Default",
+    "Providers": {
+      "Default":     { "Type": "recaptcha", "SiteKey": "6Lc...", "Secret": "..." },
+      "AdminPortal": { "Type": "recaptcha", "SiteKey": "6Lc...", "Secret": "..." }
+    }
+  }
+}
+```
+
+The key is a name you invent. It never leaves the process, nothing constrains its shape, and it is
+matched case-insensitively. The `Type` is the opposite — `recaptcha`, `hcaptcha` and `turnstile` are
+protocol tokens with a fixed spelling.
+
+## How a challenge arrives
+
+The client solves the widget, gets a token, and describes what it solved:
+
+```http
+POST /api/sign-in
+Captcha-Type: recaptcha
+Captcha-SiteKey: 6Lc...
+Captcha-Response: 03AGdBq26...
+```
+
+Where a header repeats, the last value wins. Neither header names an instance — the server decides
+that, from what the endpoint pinned or what the two headers describe. See
+[ASP.NET Core](aspnetcore) for the exact order.
+
+## What gets judged
+
+The provider decides whether the token is genuine. This library then decides whether a genuine token
+is *good enough* for the endpoint, against three requirements — a minimum score, an allow-list of
+actions, and an allow-list of hostnames. Each is off until declared.
+
+The rule that matters: **a requirement the provider cannot answer fails.** A missing score does not
+compare as low and a missing action does not compare as mismatched, so treating silence as success
+would let any threshold be satisfied by a provider that never measured anything.
+
+See [Usage](usage) for the requirement model, [Providers](providers) for what each one supports,
+[ASP.NET Core](aspnetcore) for configuration and the filter, and
+[Error definitions](error-definitions) for problem+json.

@@ -1,0 +1,94 @@
+---
+title: Usage
+description: The requirement model, the score tiers, what each rejection reason means, and calling the verifier without ASP.NET Core.
+---
+
+# Usage
+
+## Requirements
+
+An endpoint declares what it needs. Everything is off until declared, so the default accepts any
+genuine token from any configured instance.
+
+| Requirement | Declared by | Off when |
+| --- | --- | --- |
+| Minimum score | `Policy`, or `MinScore` to override it | `Policy` is `Unspecified` and `MinScore` unset |
+| Allowed actions | `AllowedActions` | the list is empty |
+| Allowed hostnames | `AllowedHosts` | the list is empty |
+
+## Score tiers
+
+| Policy | Threshold | Provider reports no score |
+| --- | --- | --- |
+| `Unspecified` | 0.5 | **accepted** |
+| `Low` | 0.2 | rejected `score_unavailable` |
+| `Medium` | 0.5 | rejected `score_unavailable` |
+| `High` | 0.85 | rejected `score_unavailable` |
+
+`Unspecified` is the only value that tolerates a score-less provider, which is why reCAPTCHA v2 and
+Turnstile keep working by default. **Naming a tier is what turns the score into a requirement**, so
+`Medium` and `Unspecified` share a threshold but not a meaning: the first insists on a score, the
+second merely applies the threshold to one it was given.
+
+An explicit `MinScore` also requires a score, and overrides the tier's threshold.
+
+> **Warning.** Naming any tier on an endpoint served by reCAPTCHA v2 or Turnstile rejects every
+> request, because neither reports a score. See [Providers](providers).
+
+Actions are compared **ordinally**: an action is an opaque token your own front end chooses, so
+`Sign_In` and `sign_in` are different actions. Hostnames are compared **case-insensitively**, as DNS
+names are.
+
+## Rejection reasons
+
+The reason travels in the error payload and is the thing a client should switch on.
+
+| Reason | Means |
+| --- | --- |
+| `unknown_provider` | nothing matched what the request described, and no default applied |
+| `ambiguous_provider` | several instances matched and none is the default; send a site key |
+| `provider_mismatch` | the endpoint pins an instance the request's description contradicts |
+| `missing_response` | the request carried no token |
+| `not_verified` | the provider itself did not accept the token |
+| `low_score` | scored, but below the threshold |
+| `score_unavailable` | a score was required and the provider reports none |
+| `action_mismatch` | the action was not in the allow-list |
+| `action_unavailable` | an action was required and the provider reports none |
+| `hostname_mismatch` | the challenge was served from a hostname not in the allow-list |
+
+A rejection also carries the provider's own codes, normalised — `invalid_secret`,
+`timeout_or_duplicate`, `invalid_keys` and the rest — under `errors`.
+
+## Rejected, versus unable to judge
+
+These are different outcomes and they are reported differently.
+
+- `CaptchaRejectedException` — the challenge was judged and failed. The caller can act on it.
+- `CaptchaException` — the provider was unreachable, timed out, or answered unreadably. Nobody
+  judged anything. An endpoint pinning an instance that is not configured also lands here, because
+  that is a mistake in the service rather than in the request.
+
+`CaptchaRejectedException` derives from `CaptchaException`, so catching the base catches both. Build
+a rejection with `CaptchaRejectedException.ForReason(...)`; the constructors take a *message*, and a
+reason handed to one of those would be reported as prose rather than as the decision.
+
+## Without ASP.NET Core
+
+The core package verifies a token with no host involved:
+
+```csharp
+var result = await verifier.VerifyAsync(
+    "Default",
+    new CaptchaVerificationInput { Response = token, RemoteIp = clientAddress },
+    cancellationToken);
+
+var decision = await validator.ValidateAsync(
+    new CaptchaRequirements { AllowedActions = ["sign_in"] },
+    result,
+    cancellationToken);
+```
+
+Build an `ICaptchaProvider` by deriving from the provider base you want and returning a client and a
+secret; `DefaultCaptchaProviderRegistry` takes the instances you constructed. Everything else — the
+request shape, the transport failures, the unreadable answers — is handled once in the shared base,
+so providers cannot drift in how they fail.

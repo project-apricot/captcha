@@ -1,0 +1,72 @@
+---
+title: Error definitions
+description: Reporting captcha failures as RFC 9457 problem+json, and the two codes a client needs text for.
+---
+
+# Error definitions
+
+`ApricotFramework.Captcha.ErrorDefinitions` reports captcha failures through
+[ApricotFramework.ErrorDefinitions](https://projectapricot.dev). It is a separate package so that
+choosing this captcha library does not choose your error-reporting library too.
+
+```csharp
+builder.Services.AddErrorDefinitions();        // the host's call
+builder.Services.AddCaptchaErrorDefinitions(); // this library's mapper
+app.UseExceptionHandler();                     // the host's call
+```
+
+The library contributes an `IExceptionErrorMapper` and nothing else. A mapper with no handler does
+nothing, so the host still has to call `AddErrorDefinitions` and `UseExceptionHandler`; where the
+handler sits in the pipeline is the host's decision.
+
+## What a client sees
+
+```json
+{
+  "type": "about:blank",
+  "title": "Validation failed",
+  "status": 400,
+  "detail": "The captcha was rejected.",
+  "instance": "/api/demo/strict",
+  "errors": [
+    {
+      "kind": "validation",
+      "code": "CAPTCHA_REJECTED",
+      "message": "The captcha was rejected.",
+      "payload": { "reason": "score_unavailable", "providerType": "recaptcha" }
+    }
+  ]
+}
+```
+
+## The two codes
+
+| Code | Kind | Status | Means |
+| --- | --- | --- | --- |
+| `CAPTCHA_REJECTED` | `validation` | 400 | judged and failed; the caller can retry |
+| `CAPTCHA_VERIFICATION_FAILED` | `unavailable` | 503 | nobody could judge it; not the caller's fault |
+
+Two codes, not nine. The specific reason travels in `payload.reason` — see the table in
+[Usage](usage) — so the set a client needs message text for does not grow every time a new way to
+fail is recognised. `payload.errors` carries the provider's own normalised codes when it reported
+any.
+
+`payload.providerType` names the *type* that judged, never the instance. Instance names are labels
+the host invented for its own configuration, and the whole point of resolving the instance server
+side is that a client never learns them. It is null only when the request was turned away before any
+provider could be chosen.
+
+503 rather than 500 for an unreachable provider is deliberate: with secrets validated at startup, a
+verification failure at request time is an outage somewhere else, and `Retry-After` semantics are the
+honest answer.
+
+> **Note.** No exception message reaches the response. A provider failure's text routinely names the
+> provider host, the proxy, or TLS internals, and the message for an unknown provider would echo back
+> whatever the caller put in the header.
+
+## Doing it yourself
+
+The mapper is ordinary. To report captcha failures differently, skip
+`AddCaptchaErrorDefinitions` and register your own `IExceptionErrorMapper` — match
+`CaptchaRejectedException` **before** `CaptchaException`, since the first derives from the second, and
+return `null` for anything you do not recognise so the mappers after yours still get their turn.

@@ -1,0 +1,111 @@
+---
+title: ASP.NET Core
+description: Registration, the provider instances in configuration, how one is chosen for a request, and the filter that enforces a requirement per endpoint.
+---
+
+# ASP.NET Core
+
+## Registration
+
+```csharp
+builder.Services.AddCaptcha(builder.Configuration);
+```
+
+That is the whole of it. Provider instances come from configuration rather than from code, so there
+is nothing to keep in sync between the two. `AddCaptchaProviderFactory<T>()` adds a provider type of
+your own; see [Providers](providers).
+
+## Configuration
+
+```jsonc
+{
+  "Captcha": {
+    "DefaultProvider": "Default",        // an instance, not a type
+    "VerificationTimeout": "00:00:10",
+    "Providers": {
+      "Default":       { "Type": "recaptcha", "SiteKey": "6Lc...", "Secret": "..." },
+      "AdminPortal":   { "Type": "recaptcha", "SiteKey": "6Lc...", "Secret": "..." },
+      "International": { "Type": "turnstile", "SiteKey": "0x4...", "Secret": "..." }
+    }
+  }
+}
+```
+
+Checked at **startup**: every entry declares a known `Type` and a non-empty `Secret`, and
+`DefaultProvider`, if set, names an entry that exists. A blank secret would otherwise reach the
+provider, come back as `missing_secret`, and be reported to the visitor as a failed captcha — a
+deployment mistake surfacing as though it were their problem.
+
+Secrets belong in a secret store, not in `appsettings.json`.
+
+## Headers
+
+| Header | Carries |
+| --- | --- |
+| `Captcha-Response` | the challenge token |
+| `Captcha-Type` | the provider type that issued it |
+| `Captcha-SiteKey` | the site key the widget was rendered with |
+
+Where a header repeats, the last value wins. Neither `Captcha-Type` nor `Captcha-SiteKey` names an
+instance — instance names are internal.
+
+## Which instance verifies
+
+1. **The endpoint's `Provider`, if it pins one.** It always wins. If the request also describes a
+   type or site key that contradicts the pinned instance, the request is rejected as
+   `provider_mismatch` rather than sent on a round trip that could only fail.
+2. **Otherwise, whatever the headers describe.** Instances are filtered by the type and site key
+   supplied. Exactly one match is used. Several matches resolve to the default when it is among them,
+   and otherwise fail as `ambiguous_provider`. No match fails as `unknown_provider`.
+3. **Otherwise `DefaultProvider`**, when the request described nothing.
+
+Step 2's preference for the default is what makes adding an instance safe: clients sending only a
+type keep reaching the same one they always did, and a new front end opts in by sending its site key.
+
+> **Note.** Pinning an instance that is not configured raises `CaptchaException`, not a rejection.
+> That is a typo in an attribute — a mistake in the service, which startup validation cannot see
+> because it lives in code rather than configuration — so it answers 503 and logs, instead of telling
+> a visitor their captcha failed.
+
+## The filter
+
+```csharp
+[HttpPost("sign-in")]
+[ValidateCaptcha(Provider = "AdminPortal", Policy = CaptchaValidationPolicy.High,
+                 AllowedActions = ["sign_in"])]
+public Task<SignInResult> SignIn(SignInRequest request) => this.service.SignIn(request);
+```
+
+`Provider` names a configured instance. Setting it is how one surface uses a different key from
+another, and how an endpoint stops depending on what the request describes.
+
+Applying the filter to a controller *and* one of its actions is supported. The provider is asked once
+and both sets of requirements are applied to that one ruling, because a token is single use and a
+second verification would come back `timeout_or_duplicate`.
+
+## Without the filter
+
+```csharp
+app.MapPost("/api/subscribe", async (HttpContext context, ICaptchaGuard guard, CancellationToken ct) =>
+{
+    await guard.EnsureAsync(context, new CaptchaRequirements(), options: null, ct);
+
+    return Results.Ok();
+});
+```
+
+`EnsureAsync` throws on failure; `ValidateAsync` returns the decision for a caller that wants to
+handle it inline.
+
+## Behind a proxy
+
+The address sent to the provider is `HttpContext.Connection.RemoteIpAddress`. Behind a load balancer
+or CDN that is the proxy's address, and providers compare it against the solver's — so configure
+forwarded headers, or the address is at best useless and at worst causes failures.
+
+## Logging
+
+Rejections log at `Information` with the reason, the resolved instance, its type and the site key;
+resolutions and acceptances at `Debug`. An instance configured with `UsesTestKeys` logs a `Warning`
+once at startup. Instance names appear here and nowhere else a client can see. The token is never
+logged: it is a bearer credential for the provider until redeemed, and logs outlive it.

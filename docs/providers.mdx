@@ -1,0 +1,121 @@
+---
+title: Providers
+description: What reCAPTCHA, hCaptcha and Turnstile each report, which requirements they can satisfy, and how to add a provider type of your own.
+---
+
+# Providers
+
+## What each one can answer
+
+| | `recaptcha` | `hcaptcha` | `turnstile` |
+| --- | --- | --- | --- |
+| Score | v3 only | enterprise only | never |
+| Action | v3 only | yes | yes |
+| Hostname | yes | yes | yes |
+| Server-side site key check | no | **yes** | no |
+
+The score row is the one that catches people. An endpoint with `Policy = High` served by Turnstile
+rejects every request with `score_unavailable` — correctly, because nothing measured the score it is
+demanding. Either drop the score requirement or use a provider that reports one.
+
+## Score normalisation
+
+Scores are put on one scale where **1.0 is the most human**.
+
+reCAPTCHA v3 already uses it. hCaptcha reports *risk*, where higher is worse, so its score is
+inverted. Turnstile publishes no score and reports none rather than a stand-in — a fabricated 1.0
+would silently satisfy every threshold a caller set.
+
+## Site keys
+
+Every instance may declare a `SiteKey`, and it does two jobs.
+
+It selects the instance: a request naming a site key is verified by the instance holding it, which is
+how one service supports several front ends with different keys. And for hCaptcha — the only provider
+that checks this server side — it is sent on verification, so a key that does not belong to the
+secret comes back as `sitekey-secret-mismatch`.
+
+> **Note.** A site key is public; it is already in the page source. Letting a request name one grants
+> nothing, because a token issued for a different site fails against that instance's secret. What a
+> request can never choose is the *requirements* — those come from the endpoint.
+
+**Two instances may share a site key.** The providers publish exactly one reCAPTCHA test pair, and
+hCaptcha's three test site keys share a single secret, so any development configuration with more
+than one reCAPTCHA instance is forced to repeat itself. Sharing is therefore legal: a request that
+matches several instances resolves to the default one, and only fails as `ambiguous_provider` when
+the default is not among the matches.
+
+## Developing against test keys
+
+The providers' published test pairs verify any token, but they report **no score, no action, and a
+hostname of the provider's own** — `testkey.google.com`, `dummy-key-pass`, `example.com`. So an
+endpoint declaring a score tier, an action or a hostname allow-list can never be exercised with them.
+
+Say so on the instance, in the Development file:
+
+```json
+// appsettings.Development.json
+{ "Captcha": { "Providers": { "Default": { "UsesTestKeys": true } } } }
+```
+
+It is **false unless you set it**, it is per instance so a real provider alongside is unaffected, and
+an environment variable overrides it anywhere:
+
+```bash
+Captcha__Providers__Default__UsesTestKeys=false
+```
+
+Only the unanswerable is excused, and only for that instance:
+
+| Relaxed | Still enforced |
+| --- | --- |
+| a score the provider did not report | a score it reported as below the threshold |
+| an action the provider did not report | an action it reported as the wrong one |
+| the hostname allow-list | the provider rejecting the token outright |
+| | every provider-resolution failure |
+
+Each such instance logs a `Warning` once at startup, naming itself — so a log that should never
+mention it says so where anyone looks first, without adding noise to every request.
+
+> **Note.** The faithful alternative is a real key. reCAPTCHA accepts `localhost` in a key's domain
+> list, so a v3 development key returns genuine scores, actions and hostnames and needs none of this.
+> Prefer that where every developer can be given a key; the flag is for troubleshooting with the
+> published pairs, which need no provisioning at all.
+
+## Timeouts
+
+Every provider client is bounded by `Captcha:VerificationTimeout`, ten seconds by default. The
+framework default is 100 seconds, which is long enough for a slow provider to hold requests open
+until it becomes an availability problem of its own.
+
+There is one client per provider *type*, named in `CaptchaHttpClients`, so resilience is added with
+the framework's own API rather than one of ours:
+
+```csharp
+builder.Services
+    .AddHttpClient(CaptchaHttpClients.Recaptcha)
+    .AddStandardResilienceHandler();
+```
+
+## Adding a provider type
+
+Derive from `SiteverifyCaptchaProviderBase` for anything speaking the same form-post protocol, or
+implement `ICaptchaProvider` directly. Then register a factory for it:
+
+```csharp
+public sealed class FriendlyCaptchaFactory : ICaptchaProviderFactory
+{
+    public string GetProviderType() => "friendly";
+
+    public ICaptchaProvider Create(string providerName, CaptchaProviderEntry entry) =>
+        new FriendlyCaptchaProvider(providerName, entry.Secret, entry.SiteKey, this.httpClientFactory);
+}
+```
+
+```csharp
+builder.Services.AddCaptchaProviderFactory<FriendlyCaptchaFactory>();
+```
+
+Configuration can then declare instances of `"Type": "friendly"` like any other. Registering a
+factory for a type this library already ships **replaces** the built-in one, which is how you
+substitute your own implementation of reCAPTCHA or Turnstile.
