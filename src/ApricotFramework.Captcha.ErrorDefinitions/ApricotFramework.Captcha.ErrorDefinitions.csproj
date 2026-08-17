@@ -1,0 +1,16 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <Description>Reports ApricotFramework.Captcha failures as RFC 9457 problem+json: an exception mapper that turns a rejected or unverifiable captcha into a classified error carrying the rejection reason, so a client can tell an expired challenge from a low score.</Description>
+    <PackageTags>captcha;error-handling;problem-details;rfc9457;aspnetcore</PackageTags>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="ApricotFramework.ErrorDefinitions.AspNetCore" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="../ApricotFramework.Captcha.AspNetCore/ApricotFramework.Captcha.AspNetCore.csproj" />
+  </ItemGroup>
+
+</Project>

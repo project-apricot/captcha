@@ -1,0 +1,58 @@
+@host = http://localhost:5242
+
+### No headers at all: falls back to Captcha:DefaultProvider.
+POST {{host}}/api/demo/open
+Captcha-Response: any-token-the-test-key-accepts
+
+### Type alone matches Default and AdminPortal; the default wins rather than failing as ambiguous.
+POST {{host}}/api/demo/open
+Captcha-Type: recaptcha
+Captcha-Response: any-token-the-test-key-accepts
+
+### Site key alone identifies the hCaptcha instance.
+POST {{host}}/api/demo/open
+Captcha-SiteKey: 10000000-ffff-ffff-ffff-000000000001
+Captcha-Response: 10000000-aaaa-bbbb-cccc-000000000001
+
+### Two Turnstile instances differ only by site key, which is what selects between them.
+POST {{host}}/api/demo/open
+Captcha-Type: turnstile
+Captcha-SiteKey: 1x00000000000000000000BB
+Captcha-Response: XXXX.DUMMY.TOKEN.XXXX
+
+### Pinned: the endpoint chooses the instance and the headers cannot move it.
+POST {{host}}/api/demo/admin
+Captcha-Response: any-token-the-test-key-accepts
+
+### Rejected as provider_mismatch: this endpoint pins a reCAPTCHA instance.
+POST {{host}}/api/demo/admin
+Captcha-Type: turnstile
+Captcha-Response: XXXX.DUMMY.TOKEN.XXXX
+
+### Rejected as provider_mismatch: the pinned Kiosk instance uses a different site key.
+POST {{host}}/api/demo/kiosk
+Captcha-SiteKey: 1x00000000000000000000AA
+Captcha-Response: XXXX.DUMMY.TOKEN.XXXX
+
+### Rejected as unknown_provider: no instance is configured with that site key.
+POST {{host}}/api/demo/open
+Captcha-SiteKey: 9x99999999999999999999ZZ
+Captcha-Response: any-token
+
+### Rejected as score_unavailable: reCAPTCHA v2 reports no score, so High cannot be satisfied.
+POST {{host}}/api/demo/strict
+Captcha-Type: recaptcha
+Captcha-Response: any-token-the-test-key-accepts
+
+### Rejected as action_unavailable: v2 has no concept of an action.
+POST {{host}}/api/demo/action
+Captcha-Type: recaptcha
+Captcha-Response: any-token-the-test-key-accepts
+
+### Rejected as missing_response: no token at all.
+POST {{host}}/api/demo/open
+Captcha-Type: recaptcha
+
+### The same guard without MVC.
+POST {{host}}/api/minimal
+Captcha-Response: any-token-the-test-key-accepts

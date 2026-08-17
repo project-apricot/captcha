@@ -1,0 +1,5 @@
+{
+  "title": "Captcha",
+  "description": "reCAPTCHA, hCaptcha and Turnstile behind one interface, with each provider's answer normalised and judged against what an endpoint declared it needs.",
+  "pages": ["index", "usage", "providers", "aspnetcore", "error-definitions"]
+}

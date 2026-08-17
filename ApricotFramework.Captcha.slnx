@@ -1,0 +1,16 @@
+<Solution>
+  <Folder Name="/src/">
+    <Project Path="src/ApricotFramework.Captcha/ApricotFramework.Captcha.csproj" />
+    <Project Path="src/ApricotFramework.Captcha.AspNetCore/ApricotFramework.Captcha.AspNetCore.csproj" />
+    <Project Path="src/ApricotFramework.Captcha.ErrorDefinitions/ApricotFramework.Captcha.ErrorDefinitions.csproj" />
+  </Folder>
+  <Folder Name="/tests/">
+    <File Path="tests\.editorconfig" />
+    <Project Path="tests/ApricotFramework.Captcha.Tests/ApricotFramework.Captcha.Tests.csproj" />
+    <Project Path="tests/ApricotFramework.Captcha.AspNetCore.Tests/ApricotFramework.Captcha.AspNetCore.Tests.csproj" />
+    <Project Path="tests/ApricotFramework.Captcha.ErrorDefinitions.Tests/ApricotFramework.Captcha.ErrorDefinitions.Tests.csproj" />
+  </Folder>
+  <Folder Name="/examples/">
+    <Project Path="examples/ApricotFramework.Captcha.Examples.Web/ApricotFramework.Captcha.Examples.Web.csproj" />
+  </Folder>
+</Solution>

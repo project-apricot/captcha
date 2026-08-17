@@ -1,0 +1,8 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <Description>Zero-dependency CAPTCHA verification for .NET: one interface over reCAPTCHA, hCaptcha and Cloudflare Turnstile, with provider responses normalised into a single result and evaluated against declared requirements — minimum score, allowed actions and allowed hostnames.</Description>
+    <PackageTags>captcha;recaptcha;hcaptcha;turnstile;bot-detection;verification</PackageTags>
+  </PropertyGroup>
+
+</Project>
