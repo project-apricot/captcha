@@ -65,7 +65,7 @@ Captcha-Response: 03AGdBq26...
 
 Where a header repeats, the last value wins. Neither header names an instance — the server decides
 that, from what the endpoint pinned or what the two headers describe. See
-[ASP.NET Core](aspnetcore) for the exact order.
+[ASP.NET Core](./aspnetcore.mdx) for the exact order.
 
 ## What gets judged
 
@@ -77,6 +77,6 @@ The rule that matters: **a requirement the provider cannot answer fails.** A mis
 compare as low and a missing action does not compare as mismatched, so treating silence as success
 would let any threshold be satisfied by a provider that never measured anything.
 
-See [Usage](usage) for the requirement model, [Providers](providers) for what each one supports,
-[ASP.NET Core](aspnetcore) for configuration and the filter, and
-[Error definitions](error-definitions) for problem+json.
+See [Usage](./usage.mdx) for the requirement model, [Providers](./providers.mdx) for what each one supports,
+[ASP.NET Core](./aspnetcore.mdx) for configuration and the filter, and
+[Error definitions](./error-definitions.mdx) for problem+json.

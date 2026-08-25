@@ -55,4 +55,4 @@ verifies it.
 > `Unspecified` is the only tier that accepts a provider without one. Declaring no tier and no actions
 > is how an endpoint accepts anything genuine.
 
-Full documentation at [projectapricot.dev](https://projectapricot.dev).
+Full documentation at [projectapricot.dev/docs/captcha](https://projectapricot.dev/docs/captcha).

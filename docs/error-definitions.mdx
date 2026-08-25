@@ -6,7 +6,7 @@ description: Reporting captcha failures as RFC 9457 problem+json, and the two co
 # Error definitions
 
 `ApricotFramework.Captcha.ErrorDefinitions` reports captcha failures through
-[ApricotFramework.ErrorDefinitions](https://projectapricot.dev). It is a separate package so that
+[ApricotFramework.ErrorDefinitions](https://projectapricot.dev/docs/error-definitions). It is a separate package so that
 choosing this captcha library does not choose your error-reporting library too.
 
 ```csharp
@@ -47,7 +47,7 @@ handler sits in the pipeline is the host's decision.
 | `CAPTCHA_VERIFICATION_FAILED` | `unavailable` | 503 | nobody could judge it; not the caller's fault |
 
 Two codes, not nine. The specific reason travels in `payload.reason` — see the table in
-[Usage](usage) — so the set a client needs message text for does not grow every time a new way to
+[Usage](./usage.mdx) — so the set a client needs message text for does not grow every time a new way to
 fail is recognised. `payload.errors` carries the provider's own normalised codes when it reported
 any.
 
